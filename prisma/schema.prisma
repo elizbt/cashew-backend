@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Chat {
+  id        String    @id @default(uuid())
+  title     String?
+  createdAt DateTime  @default(now())
+  messages  Message[]
+
+  @@map("chats")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  chatId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  chat      Chat     @relation(fields: [chatId], references: [id])
+
+  @@map("messages")
+}
+
+model UnansweredQuestion {
+  id        String   @id @default(uuid())
+  content   String
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+
+  @@map("unanswered_questions")
+}
+
+model Department {
+  id          String @id @default(uuid())
+  name        String
+  email       String
+  phone       String
+  description String
+
+  @@map("departments")
+}
+
+model Document {
+  id        String                 @id @default(uuid())
+  content   String
+  url       String?
+  embedding Unsupported("vector")?
+  createdAt DateTime               @default(now())
+
+  @@map("documents")
+}

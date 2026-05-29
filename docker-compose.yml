@@ -1,0 +1,26 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_USER: johndoe
+      POSTGRES_PASSWORD: randompassword
+      POSTGRES_DB: tcc_chat
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    ports:
+      - '3333:3333'
+    environment:
+      DATABASE_URL: "postgresql://johndoe:randompassword@db:5432/tcc_chat?schema=public"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      PORT: 3333
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
