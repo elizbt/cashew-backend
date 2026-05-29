@@ -1,0 +1,21 @@
+# Dependências
+node_modules/
+
+# Variáveis de Ambiente e Segredos
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Compilação
+dist/
+build/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Documentação Interna
+docs/superpowers/
