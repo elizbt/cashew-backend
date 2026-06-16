@@ -12,7 +12,13 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "ingest": "tsx src/scripts/ingest.ts",
-    "ingest:local": "tsx src/scripts/ingest-local.ts"
+    "ingest:local": "tsx src/scripts/ingest-local.ts",
+    "ingest:all": "tsx src/scripts/ingest-all.ts",
+    "scrape": "tsx src/scripts/scrape.ts",
+    "lint": "biome lint ./src",
+    "lint:fix": "biome check --write --unsafe ./src",
+    "format": "biome format ./src --write",
+    "check": "biome check --write ./src"
   },
   "keywords": [],
   "author": "",
@@ -20,16 +26,27 @@
   "description": "",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "@fastify/jwt": "^10.1.0",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
     "axios": "^1.16.1",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
+    "jsonwebtoken": "^9.0.3",
+    "pdf-parse": "^2.4.5",
+    "playwright": "^1.60.0",
+    "turndown": "^7.2.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.16",
     "@types/axios": "^0.9.36",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.8.0",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/turndown": "^5.0.6",
     "prisma": "^5.22.0",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3"
