@@ -1,53 +1,62 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { PrismaClient } from '@prisma/client';
-import { embeddingModel } from '../lib/gemini';
-import * as dotenv from 'dotenv';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { PrismaClient } from "@prisma/client";
+import * as dotenv from "dotenv";
+import { geminiEmbedding } from "../lib/gemini";
 
 dotenv.config({ override: true });
 
 const prisma = new PrismaClient();
 
 async function ingestLocalFile(filePath: string) {
-  try {
-    const absolutePath = path.resolve(filePath);
-    console.log(`\n--- Iniciando ingestão local: ${absolutePath} ---`);
+	try {
+		const absolutePath = path.resolve(filePath);
+		const fileName = path.basename(filePath);
+		const fileUrl = `local://${fileName}`;
 
-    if (!fs.existsSync(absolutePath)) {
-      throw new Error('Arquivo não encontrado.');
-    }
+		console.log(`\n--- Iniciando ingestão local: ${absolutePath} ---`);
 
-    const content = fs.readFileSync(absolutePath, 'utf-8');
-    
-    const chunks = content.split('\n\n').filter(c => c.trim().length > 0);
-    console.log(`${chunks.length} blocos detectados.`);
+		if (!fs.existsSync(absolutePath)) {
+			throw new Error("Arquivo não encontrado.");
+		}
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      console.log(`Processando bloco ${i + 1}/${chunks.length}...`);
+		console.log(`Limpando registros antigos para: ${fileUrl}`);
+		await prisma.$executeRaw`DELETE FROM documents WHERE url = ${fileUrl}`;
 
-      const result = await embeddingModel.embedContent(chunk);
-      const embedding = result.embedding.values;
+		const content = fs.readFileSync(absolutePath, "utf-8");
 
-      await prisma.$executeRaw`
+		const normalizedContent = content.replace(/\r\n/g, "\n");
+		const chunks = normalizedContent
+			.split("\n\n")
+			.filter((c) => c.trim().length > 0);
+		console.log(`${chunks.length} blocos detectados.`);
+
+		for (let i = 0; i < chunks.length; i++) {
+			const chunk = chunks[i];
+			console.log(`Processando bloco ${i + 1}/${chunks.length}...`);
+
+			const result = await geminiEmbedding.embedContent(chunk);
+			const embedding = result.embedding.values;
+
+			await prisma.$executeRaw`
         INSERT INTO documents (id, content, url, embedding, "createdAt")
         VALUES (
           gen_random_uuid(), 
           ${chunk}, 
-          ${'local://' + path.basename(filePath)}, 
+          ${fileUrl}, 
           ${embedding}::vector, 
           NOW()
         )
       `;
-    }
+		}
 
-    console.log('--- Ingestão local concluída! ---\n');
-  } catch (error) {
-    console.error('Erro na ingestão local:', error);
-  } finally {
-    await prisma.$disconnect();
-  }
+		console.log("--- Ingestão local concluída! ---\n");
+	} catch (error) {
+		console.error("Erro na ingestão local:", error);
+	} finally {
+		await prisma.$disconnect();
+	}
 }
 
-const fileArg = process.argv[2] || 'src/data/conhecimento.md';
+const fileArg = process.argv[2] || "src/data/conhecimento.md";
 ingestLocalFile(fileArg);

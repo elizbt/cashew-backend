@@ -19,3 +19,17 @@ Thumbs.db
 
 # Documentação Interna
 docs/superpowers/
+
+# Base de Conhecimento (Local)
+src/data/
+
+# Scripts de teste e debug local
+test-rag.ts
+list-models.ts
+show-captcha.ts
+
+# Scripts SQL manuais (não-migrações)
+prisma/*.sql
+
+# Capturas temporárias de web scraping
+src/data/captura-*.md

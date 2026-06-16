@@ -5,7 +5,8 @@ dotenv.config();
 
 async function testRAG() {
   const chatService = new ChatService();
-  const question = "Quais são os cursos oferecidos pelo IFNMG?";
+  const args = process.argv.slice(2);
+  const question = args.length > 0 ? args.join(" ") : "Quais são os cursos oferecidos pelo IFNMG?";
 
   console.log(`\n--- Testando RAG ---`);
   console.log(`Pergunta: "${question}"`);

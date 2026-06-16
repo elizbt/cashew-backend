@@ -1,144 +1,227 @@
-import { geminiModel, embeddingModel } from "../lib/gemini";
+import { geminiEmbedding, getChatModel } from "../lib/gemini";
 import { prisma } from "../lib/prisma";
 
+export interface ChatResponse {
+	chatId: string;
+	response: string;
+	sources?: string[];
+}
+
+interface DocumentContext {
+	content: string;
+	url: string;
+}
+
+export const FALLBACK_TRIGGER = "não possuo informações precisas";
+
 const DISCLAIMER = `
-IMPORTANTE: Eu sou o "Assistente TADS", um protótipo de Inteligência Artificial criado como Projeto de Conclusão de Curso (TCC) por estudantes do IFNMG - Campus Araçuaí. 
-Eu NÃO sou um canal oficial da instituição. Minhas respostas são baseadas em documentos públicos, mas podem conter imprecisões. Sempre confirme informações críticas no site oficial (ifnmg.edu.br).
+IMPORTANTE: Eu sou a "Assistente Castanha", um protótipo de Inteligência Artificial criado como Projeto de Conclusão de Curso (TCC) por um estudante do IFNMG - Campus Araçuaí para tirar dúvidas sobre os cursos superiores e assuntos relacionados. 
+Eu NÃO sou um canal oficial da instituição. Minhas respostas são baseadas em documentos públicos, mas podem conter imprecisões. Sempre confirme informações críticas no site oficial (https://www.ifnmg.edu.br).
 `;
 
 const SYSTEM_PROMPT = `
-Você é o Assistente Virtual do IFNMG - Campus Araçuaí (Projeto de TCC).
+Você é a "Assistente Castanha", uma inteligência artificial criada para tirar dúvidas sobre os Cursos Superiores do IFNMG - Campus Araçuaí e assuntos relacionados (Projeto de TCC).
 
 REGRAS RÍGIDAS DE ATUAÇÃO:
-1. Responda APENAS sobre o IFNMG Campus Araçuaí e assuntos acadêmicos relacionados.
-2. Utilize o contexto fornecido abaixo para basear suas respostas.
-3. Se o usuário perguntar algo fora do contexto fornecido ou fora do escopo institucional, ou se você não tiver certeza, responda: "Sinto muito, mas não possuo informações precisas sobre este assunto no momento."
-4. Sempre mantenha um tom profissional e cordial.
-5. Em sua primeira resposta em um novo chat, você DEVE incluir o aviso de que é um projeto de TCC.
-
-${DISCLAIMER}
+1. Seu objetivo é tirar dúvidas sobre os cursos superiores (como Administração, Engenharia Agrícola e Ambiental, TADS e Gestão em Saúde) e serviços do Campus Araçuaí.
+2. Se o usuário perguntar sobre Cursos Técnicos, Ensino Médio ou qualquer outro assunto fora do escopo de Ensino Superior, responda educadamente que seu escopo é limitado apenas aos cursos de graduação (superiores).
+3. Utilize o contexto fornecido para basear suas respostas de forma direta e objetiva.
+4. Se você não encontrar a informação no contexto ou se a pergunta for fora do escopo institucional superior, responda exatamente: "${FALLBACK_TRIGGER} sobre este assunto no momento."
+5. Sempre mantenha um tom profissional e cordial.
+6. Não repita avisos sobre ser um projeto de TCC ou sua identidade, a menos que seja a primeira mensagem do chat.
 `;
 
 export class ChatService {
-  private async getContext(query: string): Promise<string> {
-    try {
-      const result = await embeddingModel.embedContent(query);
-      const vector = result.embedding.values;
+	private async getContext(
+		query: string,
+	): Promise<{ text: string; sources: string[] }> {
+		try {
+			const result = await geminiEmbedding.embedContent(query);
+			const vector = result.embedding.values;
 
-      const documents: any[] = await prisma.$queryRaw`
-        SELECT content FROM documents 
+			const documents = await prisma.$queryRaw<DocumentContext[]>`
+        SELECT content, url FROM documents 
         ORDER BY embedding <=> ${vector}::vector 
-        LIMIT 3
+        LIMIT 10
       `;
 
-      if (documents.length === 0) return "";
+			if (documents.length === 0) return { text: "", sources: [] };
 
-      return documents.map(d => d.content).join("\n\n---\n\n");
-    } catch (error) {
-      console.error("Erro ao buscar contexto RAG:", error);
-      return "";
-    }
-  }
+			const text = documents.map((d) => d.content).join("\n\n---\n\n");
+			const sources = [...new Set(documents.map((d) => d.url))];
 
-  async sendMessage(content: string, chatId?: string) {
-    let chat;
+			return { text, sources };
+		} catch (error) {
+			console.error("Erro ao buscar contexto RAG:", error);
+			return { text: "", sources: [] };
+		}
+	}
 
-    if (chatId) {
-      chat = await prisma.chat.findUnique({
-        where: { id: chatId },
-        include: { messages: { orderBy: { createdAt: "desc" }, take: 10 } },
-      });
-      if (chat) chat.messages.reverse();
-    }
+	async sendMessage(
+		content: string,
+		userId: string,
+		chatId?: string,
+	): Promise<ChatResponse> {
+		let chat:
+			| (import("@prisma/client").Chat & {
+					messages: import("@prisma/client").Message[];
+			  })
+			| null = null;
 
-    if (!chat) {
-      chat = await prisma.chat.create({
-        data: { title: content.substring(0, 50) },
-        include: { messages: true },
-      });
-    }
+		if (chatId) {
+			chat = await prisma.chat.findUnique({
+				where: { id: chatId, userId },
+				include: { messages: { orderBy: { createdAt: "desc" }, take: 10 } },
+			});
+			if (chat) chat.messages.reverse();
+		}
 
-    const context = await this.getContext(content);
+		if (!chat) {
+			chat = await prisma.chat.create({
+				data: { 
+					title: content.substring(0, 50),
+					userId 
+				},
+				include: { messages: true },
+			});
+		}
 
-    await prisma.message.create({
-      data: {
-        chatId: chat.id,
-        role: "user",
-        content,
-      },
-    });
+		const { text: contextText, sources } = await this.getContext(content);
 
-    const history = chat.messages.map((m) => ({
-      role: m.role,
-      parts: [{ text: m.content }],
-    }));
+		await prisma.message.create({
+			data: {
+				chatId: chat.id,
+				role: "user",
+				content,
+			},
+		});
 
-    const fullPrompt = `
-Contexto recuperado do site oficial:
-${context || "Nenhuma informação específica encontrada no banco de dados."}
+		const history = (chat.messages || []).map((m) => ({
+			role: m.role === "user" ? "user" : "model",
+			parts: [{ text: m.content }],
+		}));
 
-Pergunta do Usuário: ${content}
+		const promptWithContext = `
+Abaixo está o contexto recuperado do site oficial para ajudar na resposta. 
+Se o contexto não for relevante para a pergunta, ignore-o.
+
+CONTEXTO:
+${contextText || "Nenhuma informação específica encontrada."}
+
+PERGUNTA DO USUÁRIO:
+${content}
     `;
 
-    const chatSession = geminiModel.startChat({
-      history: [
-        { role: "user", parts: [{ text: SYSTEM_PROMPT }] },
-        {
-          role: "model",
-          parts: [
-            {
-              text: "Entendido. Sou o Assistente TADS (Projeto de TCC) e utilizarei o contexto fornecido para responder de forma precisa e ética.",
-            },
-          ],
-        },
-        ...history,
-      ],
-    });
+		const model = getChatModel(SYSTEM_PROMPT);
+		const chatSession = model.startChat({ history });
 
-    const result = await chatSession.sendMessage(fullPrompt);
-    const responseText = result.response.text();
+		const finalPrompt = history.length === 0 
+			? `${DISCLAIMER}\n\n${promptWithContext}` 
+			: promptWithContext;
 
-    const isFallbackTriggered = responseText.includes(
-      "não possuo informações precisas",
-    );
+		const result = await chatSession.sendMessage(finalPrompt);
+		const responseText = result.response.text();
 
-    if (isFallbackTriggered) {
-      await prisma.unansweredQuestion.create({
-        data: { content },
-      });
+		const urlMapping: Record<string, string> = {
+			"administracao.md":
+				"https://www.ifnmg.edu.br/cursos/263-portal/aracuai/aracuai-cursos-superiores/bacharelado-em-administracao/12981-bacharelado-em-administracao",
+			"engenharia-agricola.md":
+				"https://www.ifnmg.edu.br/cursos/408-portal/aracuai/aracuai-cursos-superiores/engenharia-agricola-e-ambiental/17185-engenharia-agricola-e-ambiental",
+			"tads.md":
+				"https://www.ifnmg.edu.br/cursos/265-portal/aracuai/aracuai-cursos-superiores/tecnologia-em-analise-e-desenvolvimento-de-sistemas/12999-tecnologia-em-analise-e-desenvolvimento-de-sistemas",
+			"gestao-saude.md":
+				"https://www.ifnmg.edu.br/cursos/550-portal/aracuai/aracuai-cursos-superiores/tecnologia-em-gestao-em-saude/22763-tecnologia-em-gestao-em-saude",
+			"gestao-ambiental.md":
+				"https://www.ifnmg.edu.br/cursos/264-portal/aracuai/aracuai-cursos-superiores/tecnologia-em-gestao-ambiental/12990-tecnologia-em-gestao-ambiental",
+			"estude-no-ifnmg.md": "https://www.ifnmg.edu.br/estude-no-ifnmg",
+			"assistencia-estudantil.md":
+				"https://www.ifnmg.edu.br/assistencia-estudantil-aracuai/apresentacao",
+			"biblioteca.md": "https://www.ifnmg.edu.br/biblioteca-ara/apresentacao",
+			"historico-campus.md": "https://www.ifnmg.edu.br/manu-aracuai/historico",
+		};
 
-      const departments = await prisma.department.findMany();
-      const contactsInfo = departments
-        .map((d) => `${d.name}: ${d.email} | ${d.phone}`)
-        .join("\n");
+		const mappedSources = sources
+			.map((src) => {
+				const fileName = src.split("/").pop() || "";
+				return urlMapping[fileName] || null;
+			})
+			.filter((src): src is string => src !== null);
 
-      const finalResponse = `${responseText}\n\nPara mais informações, você pode entrar em contato com os setores responsáveis:\n${contactsInfo || "Secretaria Acadêmica: secretaria.aracuai@ifnmg.edu.br"}`;
+		const uniqueSources = [...new Set(mappedSources)];
 
-      await prisma.message.create({
-        data: {
-          chatId: chat.id,
-          role: "model",
-          content: finalResponse,
-        },
-      });
+		const isFallbackTriggered = responseText.includes(FALLBACK_TRIGGER);
 
-      return {
-        chatId: chat.id,
-        response: finalResponse,
-      };
-    }
+		if (isFallbackTriggered) {
+			await prisma.unansweredQuestion.create({
+				data: { content },
+			});
 
-    await prisma.message.create({
-      data: {
-        chatId: chat.id,
-        role: "model",
-        content: responseText,
-      },
-    });
+			const departments = await prisma.department.findMany();
+			const contactsInfo = departments
+				.map((d) => `${d.name}: ${d.email} | ${d.phone}`)
+				.join("\n");
 
-    return {
-      chatId: chat.id,
-      response: responseText,
-    };
-  }
+			const finalResponse = `${responseText}\n\nPara mais informações, você pode entrar em contato com os setores responsáveis:\n${contactsInfo || "Secretaria Acadêmica: secretaria.aracuai@ifnmg.edu.br"}`;
+
+			await prisma.message.create({
+				data: {
+					chatId: chat.id,
+					role: "model",
+					content: finalResponse,
+				},
+			});
+
+			return {
+				chatId: chat.id,
+				response: finalResponse,
+				sources: [],
+			};
+		}
+
+		await prisma.message.create({
+			data: {
+				chatId: chat.id,
+				role: "model",
+				content: responseText,
+			},
+		});
+
+		return {
+			chatId: chat.id,
+			response: responseText,
+			sources: uniqueSources,
+		};
+	}
+
+	async getChatMessages(chatId: string) {
+		const chat = await prisma.chat.findUnique({
+			where: { id: chatId },
+			include: {
+				messages: {
+					orderBy: { createdAt: "asc" },
+				},
+			},
+		});
+
+		return chat;
+	}
+
+	async deleteChat(chatId: string, userId: string) {
+		const chat = await prisma.chat.findUnique({
+			where: { id: chatId },
+		});
+
+		if (!chat || chat.userId !== userId) {
+			throw new Error("Chat not found or not owned by user");
+		}
+
+		await prisma.$transaction([
+			prisma.message.deleteMany({
+				where: { chatId },
+			}),
+			prisma.chat.delete({
+				where: { id: chatId },
+			}),
+		]);
+	}
 }
