@@ -42,7 +42,7 @@ export class ChatService {
 			const documents = await prisma.$queryRaw<DocumentContext[]>`
         SELECT content, url FROM documents 
         ORDER BY embedding <=> ${vector}::vector 
-        LIMIT 10
+        LIMIT 5
       `;
 
 			if (documents.length === 0) return { text: "", sources: [] };
@@ -112,15 +112,33 @@ PERGUNTA DO USUÁRIO:
 ${content}
     `;
 
-		const model = getChatModel(SYSTEM_PROMPT);
-		const chatSession = model.startChat({ history });
-
 		const finalPrompt = history.length === 0 
 			? `${DISCLAIMER}\n\n${promptWithContext}` 
 			: promptWithContext;
 
-		const result = await chatSession.sendMessage(finalPrompt);
-		const responseText = result.response.text();
+		let responseText = "";
+		let attempts = 0;
+		const maxAttempts = 3;
+
+		while (attempts < maxAttempts) {
+			try {
+				const useFallback = attempts > 0;
+				const model = getChatModel(SYSTEM_PROMPT, useFallback);
+				const chatSession = model.startChat({ history });
+				const result = await chatSession.sendMessage(finalPrompt);
+				responseText = result.response.text();
+				break;
+			} catch (error: any) {
+				attempts++;
+				console.error(`Tentativa ${attempts} falhou:`, error.message);
+				
+				if (attempts >= maxAttempts) {
+					throw error;
+				}
+				
+				await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+			}
+		}
 
 		const urlMapping: Record<string, string> = {
 			"administracao.md":
@@ -206,13 +224,22 @@ ${content}
 		return chat;
 	}
 
+	async getUserChats(userId: string) {
+		const chats = await prisma.chat.findMany({
+			where: { userId },
+			orderBy: { createdAt: "desc" },
+		});
+
+		return chats;
+	}
+
 	async deleteChat(chatId: string, userId: string) {
 		const chat = await prisma.chat.findUnique({
 			where: { id: chatId },
 		});
 
 		if (!chat || chat.userId !== userId) {
-			throw new Error("Chat not found or not owned by user");
+			throw new Error("Chat find error");
 		}
 
 		await prisma.$transaction([

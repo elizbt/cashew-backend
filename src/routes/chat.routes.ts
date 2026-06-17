@@ -7,6 +7,7 @@ const chatController = new ChatController(chatService);
 
 export async function chatRoutes(app: FastifyInstance) {
 	app.post("/chat", chatController.handle.bind(chatController));
+	app.get("/chats", chatController.listAll.bind(chatController));
 	app.get("/chat/:id", chatController.getHistory.bind(chatController));
 	app.delete("/chat/:id", chatController.deleteChat.bind(chatController));
 }

@@ -9,6 +9,7 @@ const app = fastify({ logger: true });
 
 app.register(cors, {
 	origin: "*",
+	methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 
 app.register(fastifyJwt, {
