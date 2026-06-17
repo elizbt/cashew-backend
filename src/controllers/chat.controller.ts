@@ -36,6 +36,20 @@ export class ChatController {
 		}
 	}
 
+	async listAll(request: FastifyRequest, reply: FastifyReply) {
+		try {
+			await request.jwtVerify();
+			const userId = (request.user as any).sub as string;
+
+			const chats = await this.chatService.getUserChats(userId);
+
+			return reply.status(200).send(chats);
+		} catch (error: unknown) {
+			console.error("Erro ao listar chats:", error);
+			return reply.status(500).send({ message: "Erro ao buscar conversas." });
+		}
+	}
+
 	async getHistory(request: FastifyRequest, reply: FastifyReply) {
 		try {
 			await request.jwtVerify();

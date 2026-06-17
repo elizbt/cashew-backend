@@ -5,21 +5,24 @@ dotenv.config({ override: true });
 
 const apiKey = (process.env.GEMINI_API_KEY || "").trim();
 const chatModelName = (
-	process.env.GEMINI_CHAT_MODEL || "gemini-1.5-flash"
+	process.env.GEMINI_CHAT_MODEL || "gemini-2.5-flash"
+).trim();
+const fallbackModelName = (
+	process.env.GEMINI_FALLBACK_MODEL || "gemini-3.1-flash-lite"
 ).trim();
 const embeddingModelName = (
 	process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004"
 ).trim();
 
 if (!apiKey) {
-	console.warn("Aviso: GEMINI_API_KEY não encontrada ou está vazia.");
+	console.warn("Aviso: GEMINI_API_KEY não encontrada.");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey);
 
-export function getChatModel(systemInstruction?: string) {
+export function getChatModel(systemInstruction?: string, useFallback = false) {
 	return genAI.getGenerativeModel({
-		model: chatModelName,
+		model: useFallback ? fallbackModelName : chatModelName,
 		systemInstruction,
 	});
 }
