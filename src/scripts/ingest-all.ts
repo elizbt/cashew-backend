@@ -15,6 +15,18 @@ const DATA_DIRS = {
 	faq: path.join(process.cwd(), "src/data/faq"),
 };
 
+// Mapeia o arquivo fonte para o "slug" de curso usado no filtro de retrieval
+// (ver COURSE_KEYWORDS em src/services/chat.service.ts). Arquivos institucionais
+// (biblioteca, assistência estudantil, corpo docente etc.) não pertencem a um
+// curso específico e ficam com course = null.
+const COURSE_MAP: Record<string, string> = {
+	"tads.md": "tads",
+	"administracao.md": "administracao",
+	"engenharia-agricola.md": "engenharia-agricola-ambiental",
+	"gestao-saude.md": "gestao-saude",
+	"gestao-ambiental.md": "gestao-ambiental",
+};
+
 async function chunkText(
 	text: string,
 	size = 1500,
@@ -31,14 +43,42 @@ async function chunkText(
 	return chunks;
 }
 
+// Chunking "consciente" de markdown: primeiro separa por seções (## ...) pra
+// não cortar uma informação (ex: "Coordenador: Fulano") no meio da frase.
+// Seções que ainda assim ficarem grandes demais são sub-divididas pelo
+// chunker de tamanho fixo, mantendo o cabeçalho da seção em cada pedaço.
+async function chunkMarkdown(text: string, maxSize = 1500): Promise<string[]> {
+	const sections = text
+		.split(/\n(?=#{1,3} )/)
+		.filter((s) => s.trim().length > 0);
+
+	const chunks: string[] = [];
+	for (const section of sections) {
+		if (section.length <= maxSize) {
+			chunks.push(section);
+			continue;
+		}
+
+		const headingMatch = section.match(/^#{1,3} .*$/m);
+		const heading = headingMatch ? `${headingMatch[0]}\n\n` : "";
+		const subChunks = await chunkText(section, maxSize, 200);
+		subChunks.forEach((sub, idx) =>
+			chunks.push(idx === 0 ? sub : `${heading}${sub}`),
+		);
+	}
+
+	return chunks;
+}
+
 async function processFile(
 	filePath: string,
 	type: "manual" | "documentos" | "faq",
 ) {
 	const fileName = path.basename(filePath);
 	const fileUrl = `file://${type}/${fileName}`;
+	const course = COURSE_MAP[fileName] || null;
 
-	console.log(`\n--- Processando: ${fileUrl} ---`);
+	console.log(`\n--- Processando: ${fileUrl}${course ? ` [curso: ${course}]` : ""} ---`);
 
 	try {
 		await prisma.$executeRaw`DELETE FROM documents WHERE url = ${fileUrl}`;
@@ -66,10 +106,8 @@ async function processFile(
 		}
 
 		let chunks: string[] = [];
-		if (type === "faq") {
-			chunks = normalizedContent
-				.split(/\n(?=# )|\n(?=## )/)
-				.filter((c) => c.trim().length > 0);
+		if (type === "faq" || filePath.toLowerCase().endsWith(".md")) {
+			chunks = await chunkMarkdown(normalizedContent);
 		} else {
 			chunks = await chunkText(normalizedContent);
 		}
@@ -85,12 +123,13 @@ async function processFile(
 			const embedding = result.embedding.values;
 
 			await prisma.$executeRaw`
-        INSERT INTO documents (id, content, url, embedding, "createdAt")
+        INSERT INTO documents (id, content, url, course, embedding, "createdAt")
         VALUES (
-          gen_random_uuid(), 
-          ${chunk}, 
-          ${fileUrl}, 
-          ${embedding}::vector, 
+          gen_random_uuid(),
+          ${chunk},
+          ${fileUrl},
+          ${course},
+          ${embedding}::vector,
           NOW()
         )
       `;
