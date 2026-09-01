@@ -4,6 +4,7 @@ import "dotenv/config";
 const envSchema = z.object({
 	GEMINI_API_KEY: z.string().min(1),
 	DATABASE_URL: z.string().url(),
+	JWT_SECRET: z.string().min(16),
 	PORT: z.coerce.number().default(3333),
 });
 

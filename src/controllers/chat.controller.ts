@@ -1,16 +1,13 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { chatSchema } from "@/schemas/chat.schema.js";
 import type { ChatService } from "@/services/chat.service.js";
-
-import { z } from "zod";
 
 export class ChatController {
 	constructor(private chatService: ChatService) {}
 
 	async handle(request: FastifyRequest, reply: FastifyReply) {
 		try {
-			await request.jwtVerify();
 			const userId = (request.user as any).sub as string;
 
 			const data = chatSchema.parse(request.body);
@@ -38,7 +35,6 @@ export class ChatController {
 
 	async listAll(request: FastifyRequest, reply: FastifyReply) {
 		try {
-			await request.jwtVerify();
 			const userId = (request.user as any).sub as string;
 
 			const chats = await this.chatService.getUserChats(userId);
@@ -52,7 +48,6 @@ export class ChatController {
 
 	async getHistory(request: FastifyRequest, reply: FastifyReply) {
 		try {
-			await request.jwtVerify();
 			const userId = (request.user as any).sub as string;
 
 			const paramsSchema = z.object({
@@ -78,7 +73,6 @@ export class ChatController {
 
 	async deleteChat(request: FastifyRequest, reply: FastifyReply) {
 		try {
-			await request.jwtVerify();
 			const userId = (request.user as any).sub as string;
 
 			const paramsSchema = z.object({
@@ -95,7 +89,10 @@ export class ChatController {
 				return reply.status(400).send({ message: "ID de conversa inválido." });
 			}
 
-			if (error instanceof Error && error.message === "Chat not found or not owned by user") {
+			if (
+				error instanceof Error &&
+				error.message === "Chat not found or not owned by user"
+			) {
 				return reply.status(404).send({ message: "Conversa não encontrada." });
 			}
 

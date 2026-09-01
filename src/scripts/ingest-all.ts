@@ -2,7 +2,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv";
+
 const { PDFParse } = require("pdf-parse");
+
 import { geminiEmbedding } from "../lib/gemini";
 
 dotenv.config({ override: true });
@@ -62,9 +64,9 @@ async function chunkMarkdown(text: string, maxSize = 1500): Promise<string[]> {
 		const headingMatch = section.match(/^#{1,3} .*$/m);
 		const heading = headingMatch ? `${headingMatch[0]}\n\n` : "";
 		const subChunks = await chunkText(section, maxSize, 200);
-		subChunks.forEach((sub, idx) =>
-			chunks.push(idx === 0 ? sub : `${heading}${sub}`),
-		);
+		for (const [idx, sub] of subChunks.entries()) {
+			chunks.push(idx === 0 ? sub : `${heading}${sub}`);
+		}
 	}
 
 	return chunks;
@@ -78,7 +80,9 @@ async function processFile(
 	const fileUrl = `file://${type}/${fileName}`;
 	const course = COURSE_MAP[fileName] || null;
 
-	console.log(`\n--- Processando: ${fileUrl}${course ? ` [curso: ${course}]` : ""} ---`);
+	console.log(
+		`\n--- Processando: ${fileUrl}${course ? ` [curso: ${course}]` : ""} ---`,
+	);
 
 	try {
 		await prisma.$executeRaw`DELETE FROM documents WHERE url = ${fileUrl}`;
@@ -141,7 +145,9 @@ async function processFile(
 
 async function main() {
 	try {
-		console.log("\n=== Iniciando ingestão completa da base de conhecimento ===\n");
+		console.log(
+			"\n=== Iniciando ingestão completa da base de conhecimento ===\n",
+		);
 
 		for (const [key, dirPath] of Object.entries(DATA_DIRS)) {
 			if (!fs.existsSync(dirPath)) {

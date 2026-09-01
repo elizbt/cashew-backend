@@ -1,27 +1,7 @@
-import cors from "@fastify/cors";
-import fastifyJwt from "@fastify/jwt";
-import fastify from "fastify";
-import { env } from "@/config/env.js";
-import { chatRoutes } from "@/routes/chat.routes.js";
-import { authRoutes } from "@/routes/auth.routes.js";
+import { buildApp } from "./app";
+import { env } from "./config/env";
 
-const app = fastify({ logger: true });
-
-app.register(cors, {
-	origin: "*",
-	methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-});
-
-app.register(fastifyJwt, {
-	secret: process.env.JWT_SECRET || "super-secret-tcc-key",
-});
-
-app.register(authRoutes);
-app.register(chatRoutes);
-
-app.get("/health", async () => {
-	return { status: "ok" };
-});
+const app = buildApp();
 
 const start = async () => {
 	try {

@@ -130,9 +130,9 @@ export class ChatService {
 
 		if (!chat) {
 			chat = await prisma.chat.create({
-				data: { 
+				data: {
 					title: content.substring(0, 50),
-					userId 
+					userId,
 				},
 				include: { messages: true },
 			});
@@ -164,9 +164,10 @@ PERGUNTA DO USUÁRIO:
 ${content}
     `;
 
-		const finalPrompt = history.length === 0 
-			? `${DISCLAIMER}\n\n${promptWithContext}` 
-			: promptWithContext;
+		const finalPrompt =
+			history.length === 0
+				? `${DISCLAIMER}\n\n${promptWithContext}`
+				: promptWithContext;
 
 		let responseText = "";
 		let attempts = 0;
@@ -183,12 +184,12 @@ ${content}
 			} catch (error: any) {
 				attempts++;
 				console.error(`Tentativa ${attempts} falhou:`, error.message);
-				
+
 				if (attempts >= maxAttempts) {
 					throw error;
 				}
-				
-				await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+
+				await new Promise((resolve) => setTimeout(resolve, attempts * 1000));
 			}
 		}
 
@@ -291,7 +292,7 @@ ${content}
 		});
 
 		if (!chat || chat.userId !== userId) {
-			throw new Error("Chat find error");
+			throw new Error("Chat not found or not owned by user");
 		}
 
 		await prisma.$transaction([

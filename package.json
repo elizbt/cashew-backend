@@ -15,6 +15,9 @@
     "ingest:local": "tsx src/scripts/ingest-local.ts",
     "ingest:all": "tsx src/scripts/ingest-all.ts",
     "scrape": "tsx src/scripts/scrape.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "biome lint ./src",
     "lint:fix": "biome check --write --unsafe ./src",
     "format": "biome format ./src --write",
@@ -47,8 +50,10 @@
     "@types/node": "^25.8.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/turndown": "^5.0.6",
+    "@vitest/coverage-v8": "^4.1.11",
     "prisma": "^5.22.0",
     "tsx": "^4.22.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
   }
 }
