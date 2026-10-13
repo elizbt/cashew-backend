@@ -70,6 +70,78 @@ describe("routes/chat.routes", () => {
 		});
 	});
 
+	describe("security headers", () => {
+		it("sets baseline security headers (helmet) on every response", async () => {
+			const response = await app.inject({ method: "GET", url: "/health" });
+
+			expect(response.headers["x-content-type-options"]).toBe("nosniff");
+			expect(response.headers["x-frame-options"]).toBe("SAMEORIGIN");
+			expect(response.headers["strict-transport-security"]).toBeDefined();
+		});
+	});
+
+	describe("cookie-based session + CSRF (double-submit)", () => {
+		it("allows a safe GET using only the cookie, no CSRF header needed", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/chats",
+				cookies: { token: tokenForUser1 },
+			});
+
+			expect(response.statusCode).toBe(200);
+		});
+
+		it("blocks a cookie-authenticated POST /chat with no CSRF header at all", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/chat",
+				cookies: { token: tokenForUser1, csrfToken: "the-real-csrf-value" },
+				payload: { message: "Oi" },
+			});
+
+			expect(response.statusCode).toBe(403);
+			expect(prismaMock.chat.create).not.toHaveBeenCalled();
+		});
+
+		it("blocks a cookie-authenticated POST /chat when the CSRF header doesn't match the cookie", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/chat",
+				cookies: { token: tokenForUser1, csrfToken: "the-real-csrf-value" },
+				headers: { "x-csrf-token": "a-guessed-wrong-value" },
+				payload: { message: "Oi" },
+			});
+
+			expect(response.statusCode).toBe(403);
+		});
+
+		it("allows a cookie-authenticated POST /chat when the CSRF header matches the cookie", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/chat",
+				cookies: { token: tokenForUser1, csrfToken: "the-real-csrf-value" },
+				headers: { "x-csrf-token": "the-real-csrf-value" },
+				payload: { message: "Oi" },
+			});
+
+			expect(response.statusCode).toBe(200);
+		});
+
+		it("does not require a CSRF header for Bearer-token auth (not vulnerable to CSRF)", async () => {
+			// No browser attaches a custom Authorization header automatically
+			// cross-site, so a request authenticated this way can only have
+			// been sent deliberately by the legitimate client.
+			const response = await app.inject({
+				method: "POST",
+				url: "/chat",
+				headers: { authorization: `Bearer ${tokenForUser1}` },
+				payload: { message: "Oi" },
+			});
+
+			expect(response.statusCode).toBe(200);
+		});
+	});
+
 	describe("authentication guard", () => {
 		it.each([
 			["POST", "/chat"],

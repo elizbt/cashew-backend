@@ -85,4 +85,68 @@ describe("config/env", () => {
 			),
 		).rejects.toThrow("Invalid environment variables");
 	});
+
+	it("defaults NODE_ENV to development when not provided", async () => {
+		const { env } = await loadEnvWith(
+			{
+				GEMINI_API_KEY: "a-valid-key",
+				DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+				JWT_SECRET: "a-secret-that-is-long-enough",
+			},
+			["NODE_ENV", "CORS_ORIGIN"],
+		);
+
+		expect(env.NODE_ENV).toBe("development");
+	});
+
+	it("rejects an unrecognized NODE_ENV value", async () => {
+		await expect(
+			loadEnvWith({
+				GEMINI_API_KEY: "a-valid-key",
+				DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+				JWT_SECRET: "a-secret-that-is-long-enough",
+				NODE_ENV: "staging",
+			}),
+		).rejects.toThrow("Invalid environment variables");
+	});
+
+	it("does not require CORS_ORIGIN outside production", async () => {
+		const { env } = await loadEnvWith(
+			{
+				GEMINI_API_KEY: "a-valid-key",
+				DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+				JWT_SECRET: "a-secret-that-is-long-enough",
+				NODE_ENV: "development",
+			},
+			["CORS_ORIGIN"],
+		);
+
+		expect(env.CORS_ORIGIN).toBeUndefined();
+	});
+
+	it("throws instead of booting in production without CORS_ORIGIN (would otherwise reflect/allow any origin with credentials)", async () => {
+		await expect(
+			loadEnvWith(
+				{
+					GEMINI_API_KEY: "a-valid-key",
+					DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+					JWT_SECRET: "a-secret-that-is-long-enough",
+					NODE_ENV: "production",
+				},
+				["CORS_ORIGIN"],
+			),
+		).rejects.toThrow("Invalid environment variables");
+	});
+
+	it("loads successfully in production once CORS_ORIGIN is set", async () => {
+		const { env } = await loadEnvWith({
+			GEMINI_API_KEY: "a-valid-key",
+			DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+			JWT_SECRET: "a-secret-that-is-long-enough",
+			NODE_ENV: "production",
+			CORS_ORIGIN: "https://app.example.com",
+		});
+
+		expect(env.CORS_ORIGIN).toBe("https://app.example.com");
+	});
 });
