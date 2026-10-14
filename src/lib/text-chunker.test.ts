@@ -21,12 +21,36 @@ describe("lib/text-chunker", () => {
 	});
 
 	describe("chunkMarkdown", () => {
-		it("keeps each small section as its own chunk, heading included", () => {
+		it("keeps each small section as its own chunk, prefixed with the document title", () => {
 			const text = "# Curso\nIntro\n## Coordenação\nCoordenador: Fulano";
 
 			expect(chunkMarkdown(text, 100)).toEqual([
 				"# Curso\nIntro",
-				"## Coordenação\nCoordenador: Fulano",
+				"# Curso\n\n## Coordenação\nCoordenador: Fulano",
+			]);
+		});
+
+		it("does not duplicate the title in the section that already starts with it", () => {
+			const [first] = chunkMarkdown("# Doc\nIntro\n## A\nconteúdo", 100);
+
+			expect(first.match(/^# /gm)).toHaveLength(1);
+		});
+
+		it("keeps the title and section heading on every piece of an oversized section", () => {
+			const doc = `# Doc\n\n## Seção longa\n${"x".repeat(900)}`;
+
+			const chunks = chunkMarkdown(doc, 300);
+
+			expect(chunks.length).toBeGreaterThan(2);
+			for (const chunk of chunks.slice(1)) {
+				expect(chunk.startsWith("# Doc\n\n## Seção longa")).toBe(true);
+			}
+		});
+
+		it("leaves chunks untouched when the document has no title", () => {
+			expect(chunkMarkdown("## A\nconteúdo a\n## B\nconteúdo b", 100)).toEqual([
+				"## A\nconteúdo a",
+				"## B\nconteúdo b",
 			]);
 		});
 

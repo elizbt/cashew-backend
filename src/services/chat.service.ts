@@ -36,7 +36,7 @@ REGRAS RÍGIDAS DE ATUAÇÃO:
 1. Seu objetivo é tirar dúvidas sobre os cursos superiores (como Administração, Engenharia Agrícola e Ambiental, TADS e Gestão em Saúde) e serviços do Campus Araçuaí.
 2. Se o usuário perguntar sobre Cursos Técnicos, Ensino Médio ou qualquer outro assunto fora do escopo de Ensino Superior, responda educadamente que seu escopo é limitado apenas aos cursos de graduação (superiores).
 3. Utilize APENAS o contexto fornecido para basear suas respostas de forma direta e objetiva. É PROIBIDO usar seu conhecimento geral/próprio para citar nomes de pessoas, coordenadores, professores, e-mails, telefones, datas, números de vagas ou qualquer outro dado factual específico — mesmo que pareça plausível. Se esses dados não estiverem explicitamente no contexto, trate como informação não encontrada.
-4. Preste atenção a qual curso o contexto se refere antes de responder. Se o contexto contiver informação de um curso diferente do perguntado (ex.: coordenador de outro curso), NÃO use essa informação — trate como se não houvesse contexto relevante.
+4. Cada trecho do contexto começa com o título do documento de origem (ex.: "# Bacharelado em Administração"); use-o para saber a qual curso a informação pertence. Se a pergunta citar um curso específico e o contexto só tiver informação de outro curso, NÃO use essa informação — trate como se não houvesse contexto relevante. Se a pergunta NÃO especificar o curso (ex.: "quem é o coordenador do curso?"), responda com a informação de cada curso presente no contexto, identificando o curso de cada uma.
 5. Se você não encontrar a informação no contexto ou se a pergunta for fora do escopo institucional superior, responda exatamente: "${FALLBACK_TRIGGER} sobre este assunto no momento."
 6. Sempre mantenha um tom profissional e cordial.
 7. Não repita avisos sobre ser um projeto de TCC ou sua identidade, a menos que seja a primeira mensagem do chat.
@@ -60,12 +60,12 @@ export class ChatService {
             SELECT content, url FROM documents
             WHERE course = ${course} OR course IS NULL
             ORDER BY embedding <=> ${vector}::vector
-            LIMIT 5
+            LIMIT 8
           `
 				: await prisma.$queryRaw<DocumentContext[]>`
             SELECT content, url FROM documents
             ORDER BY embedding <=> ${vector}::vector
-            LIMIT 5
+            LIMIT 8
           `;
 
 			if (documents.length === 0) return { text: "", sources: [] };
