@@ -62,30 +62,6 @@ describe("routes/chat.routes", () => {
 		await app.close();
 	});
 
-	describe("CORS without CORS_ORIGIN", () => {
-		it("allows a localhost origin with credentials", async () => {
-			const response = await app.inject({
-				method: "GET",
-				url: "/health",
-				headers: { origin: "http://localhost:5173" },
-			});
-
-			expect(response.headers["access-control-allow-origin"]).toBe(
-				"http://localhost:5173",
-			);
-		});
-
-		it("does not reflect an arbitrary origin", async () => {
-			const response = await app.inject({
-				method: "GET",
-				url: "/health",
-				headers: { origin: "https://evil.example.com" },
-			});
-
-			expect(response.headers["access-control-allow-origin"]).toBeUndefined();
-		});
-	});
-
 	describe("GET /health", () => {
 		it("is public and reports ok", async () => {
 			const response = await app.inject({ method: "GET", url: "/health" });

@@ -110,6 +110,23 @@ describe("config/env", () => {
 		).rejects.toThrow("Invalid environment variables");
 	});
 
+	it("trusts exactly one proxy hop by default and accepts an explicit count", async () => {
+		const base = {
+			GEMINI_API_KEY: "a-valid-key",
+			DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+			JWT_SECRET: "a-secret-that-is-long-enough",
+		};
+
+		const { env: defaults } = await loadEnvWith(base, ["TRUST_PROXY_HOPS"]);
+		expect(defaults.TRUST_PROXY_HOPS).toBe(1);
+
+		const { env: twoHops } = await loadEnvWith({
+			...base,
+			TRUST_PROXY_HOPS: "2",
+		});
+		expect(twoHops.TRUST_PROXY_HOPS).toBe(2);
+	});
+
 	it("does not require CORS_ORIGIN outside production", async () => {
 		const { env } = await loadEnvWith(
 			{

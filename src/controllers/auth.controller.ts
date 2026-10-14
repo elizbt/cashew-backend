@@ -8,7 +8,7 @@ import {
 	SESSION_TTL_JWT,
 	SESSION_TTL_SECONDS,
 } from "../lib/auth-cookie.constants";
-import { validationErrorResponse } from "../lib/validation-error";
+import { validationErrorResponse } from "../lib/validation-error.mapper";
 import {
 	type AuthService,
 	loginSchema,

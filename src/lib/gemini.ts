@@ -21,9 +21,10 @@ if (!apiKey) {
 const genAI = new GoogleGenerativeAI(apiKey);
 
 // Teto por chamada ao Gemini: sem ele um provedor lento prende o handler de
-// /chat indefinidamente (e o retry com fallback em chat.service multiplica a
-// espera). Fica abaixo dos 60s que o frontend espera por /chat.
-const GEMINI_TIMEOUT_MS = 25_000;
+// /chat indefinidamente. Pior caso de um /chat em chat.service: 1 embedding +
+// 3 tentativas de geração + 3s de backoff = 4 × 12s + 3s = 51s, abaixo dos
+// 60s que o frontend espera antes de abortar.
+const GEMINI_TIMEOUT_MS = 12_000;
 
 export function getChatModel(systemInstruction?: string, useFallback = false) {
 	return genAI.getGenerativeModel(

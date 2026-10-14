@@ -20,11 +20,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 	// (Render/Railway/Fly/Nginx...) — isso faz o Fastify calcular
 	// request.protocol/request.ip a partir de X-Forwarded-Proto/-For em vez
 	// do socket cru, que sempre chega como HTTP vindo do proxy.
-	// Confia em exatamente 1 salto (o proxy à frente do app): com `true`,
-	// request.ip viraria a entrada mais à esquerda do X-Forwarded-For, que o
-	// próprio cliente escolhe — e o rate limit de /login (chaveado por IP)
-	// seria contornado trocando esse header a cada tentativa.
-	const app = fastify({ logger: options.logger ?? true, trustProxy: 1 });
+	// Confia só no número declarado de saltos: com `true`, request.ip viraria a
+	// entrada mais à esquerda do X-Forwarded-For, que o próprio cliente
+	// escolhe — e o rate limit de /login (chaveado por IP) seria contornado
+	// trocando esse header a cada tentativa. Saltos a menos que o real fazem
+	// todos os clientes dividirem o IP de um proxy (e o mesmo limite).
+	const app = fastify({
+		logger: options.logger ?? true,
+		trustProxy: env.TRUST_PROXY_HOPS,
+	});
 
 	const corsOrigin = env.CORS_ORIGIN
 		? env.CORS_ORIGIN.split(",").map((origin) => origin.trim())

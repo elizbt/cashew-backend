@@ -15,6 +15,9 @@ const envSchema = z
 		// produção porque CORS com origin "*" não é compatível com
 		// credentials: true (nem o navegador permite).
 		CORS_ORIGIN: z.string().optional(),
+		// Quantos proxies (TLS/LB/CDN) existem entre o cliente e o app. Define
+		// qual entrada do X-Forwarded-For vira request.ip — chave do rate limit.
+		TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
 	})
 	.refine((data) => data.NODE_ENV !== "production" || !!data.CORS_ORIGIN, {
 		message:
