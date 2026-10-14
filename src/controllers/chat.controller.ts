@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
 import { chatSchema } from "@/schemas/chat.schema.js";
+import { validationErrorResponse } from "@/lib/validation-error.mapper.js";
 import {
 	ChatNotFoundError,
 	type ChatService,
@@ -23,10 +24,7 @@ export class ChatController {
 			return reply.status(200).send(result);
 		} catch (error: unknown) {
 			if (error instanceof ZodError) {
-				return reply.status(400).send({
-					message: "Erro de validação nos dados enviados.",
-					issues: error.format(),
-				});
+				return reply.status(400).send(validationErrorResponse(error));
 			}
 
 			console.error("Erro inesperado no ChatController:", error);
@@ -61,7 +59,10 @@ export class ChatController {
 			const chat = await this.chatService.getChatMessages(id);
 
 			if (!chat || chat.userId !== userId) {
-				return reply.status(404).send({ message: "Conversa não encontrada." });
+				return reply.status(404).send({
+					code: "CHAT_NOT_FOUND",
+					message: "Conversa não encontrada.",
+				});
 			}
 
 			return reply.status(200).send(chat);
@@ -93,7 +94,10 @@ export class ChatController {
 			}
 
 			if (error instanceof ChatNotFoundError) {
-				return reply.status(404).send({ message: "Conversa não encontrada." });
+				return reply.status(404).send({
+					code: "CHAT_NOT_FOUND",
+					message: "Conversa não encontrada.",
+				});
 			}
 
 			console.error("Erro ao deletar chat:", error);
