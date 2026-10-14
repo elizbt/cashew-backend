@@ -4,6 +4,7 @@ node_modules/
 # Variáveis de Ambiente e Segredos
 .env
 .env.*
+!.env.example
 
 # Logs
 *.log
@@ -12,6 +13,9 @@ npm-debug.log*
 # Compilação
 dist/
 build/
+
+# Cobertura de testes
+coverage/
 
 # Sistema
 .DS_Store

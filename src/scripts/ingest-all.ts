@@ -2,8 +2,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv";
+
 const { PDFParse } = require("pdf-parse");
+
+import { courseForSourceFile } from "../lib/course-catalog";
 import { geminiEmbedding } from "../lib/gemini";
+import { chunkMarkdown, chunkText } from "../lib/text-chunker";
 
 dotenv.config({ override: true });
 
@@ -15,30 +19,17 @@ const DATA_DIRS = {
 	faq: path.join(process.cwd(), "src/data/faq"),
 };
 
-async function chunkText(
-	text: string,
-	size = 1500,
-	overlap = 200,
-): Promise<string[]> {
-	const chunks: string[] = [];
-	let i = 0;
-	while (i < text.length) {
-		const end = Math.min(i + size, text.length);
-		chunks.push(text.substring(i, end));
-		if (end === text.length) break;
-		i += size - overlap;
-	}
-	return chunks;
-}
-
 async function processFile(
 	filePath: string,
 	type: "manual" | "documentos" | "faq",
 ) {
 	const fileName = path.basename(filePath);
 	const fileUrl = `file://${type}/${fileName}`;
+	const course = courseForSourceFile(fileName);
 
-	console.log(`\n--- Processando: ${fileUrl} ---`);
+	console.log(
+		`\n--- Processando: ${fileUrl}${course ? ` [curso: ${course}]` : ""} ---`,
+	);
 
 	try {
 		await prisma.$executeRaw`DELETE FROM documents WHERE url = ${fileUrl}`;
@@ -66,12 +57,10 @@ async function processFile(
 		}
 
 		let chunks: string[] = [];
-		if (type === "faq") {
-			chunks = normalizedContent
-				.split(/\n(?=# )|\n(?=## )/)
-				.filter((c) => c.trim().length > 0);
+		if (type === "faq" || filePath.toLowerCase().endsWith(".md")) {
+			chunks = chunkMarkdown(normalizedContent);
 		} else {
-			chunks = await chunkText(normalizedContent);
+			chunks = chunkText(normalizedContent);
 		}
 
 		console.log(`${chunks.length} blocos detectados.`);
@@ -85,12 +74,13 @@ async function processFile(
 			const embedding = result.embedding.values;
 
 			await prisma.$executeRaw`
-        INSERT INTO documents (id, content, url, embedding, "createdAt")
+        INSERT INTO documents (id, content, url, course, embedding, "createdAt")
         VALUES (
-          gen_random_uuid(), 
-          ${chunk}, 
-          ${fileUrl}, 
-          ${embedding}::vector, 
+          gen_random_uuid(),
+          ${chunk},
+          ${fileUrl},
+          ${course},
+          ${embedding}::vector,
           NOW()
         )
       `;
@@ -102,7 +92,9 @@ async function processFile(
 
 async function main() {
 	try {
-		console.log("\n=== Iniciando ingestão completa da base de conhecimento ===\n");
+		console.log(
+			"\n=== Iniciando ingestão completa da base de conhecimento ===\n",
+		);
 
 		for (const [key, dirPath] of Object.entries(DATA_DIRS)) {
 			if (!fs.existsSync(dirPath)) {
