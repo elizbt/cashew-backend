@@ -5,7 +5,9 @@ import * as dotenv from "dotenv";
 
 const { PDFParse } = require("pdf-parse");
 
+import { courseForSourceFile } from "../lib/course-catalog";
 import { geminiEmbedding } from "../lib/gemini";
+import { chunkMarkdown, chunkText } from "../lib/text-chunker";
 
 dotenv.config({ override: true });
 
@@ -17,68 +19,13 @@ const DATA_DIRS = {
 	faq: path.join(process.cwd(), "src/data/faq"),
 };
 
-// Mapeia o arquivo fonte para o "slug" de curso usado no filtro de retrieval
-// (ver COURSE_KEYWORDS em src/services/chat.service.ts). Arquivos institucionais
-// (biblioteca, assistência estudantil, corpo docente etc.) não pertencem a um
-// curso específico e ficam com course = null.
-const COURSE_MAP: Record<string, string> = {
-	"tads.md": "tads",
-	"administracao.md": "administracao",
-	"engenharia-agricola.md": "engenharia-agricola-ambiental",
-	"gestao-saude.md": "gestao-saude",
-	"gestao-ambiental.md": "gestao-ambiental",
-};
-
-async function chunkText(
-	text: string,
-	size = 1500,
-	overlap = 200,
-): Promise<string[]> {
-	const chunks: string[] = [];
-	let i = 0;
-	while (i < text.length) {
-		const end = Math.min(i + size, text.length);
-		chunks.push(text.substring(i, end));
-		if (end === text.length) break;
-		i += size - overlap;
-	}
-	return chunks;
-}
-
-// Chunking "consciente" de markdown: primeiro separa por seções (## ...) pra
-// não cortar uma informação (ex: "Coordenador: Fulano") no meio da frase.
-// Seções que ainda assim ficarem grandes demais são sub-divididas pelo
-// chunker de tamanho fixo, mantendo o cabeçalho da seção em cada pedaço.
-async function chunkMarkdown(text: string, maxSize = 1500): Promise<string[]> {
-	const sections = text
-		.split(/\n(?=#{1,3} )/)
-		.filter((s) => s.trim().length > 0);
-
-	const chunks: string[] = [];
-	for (const section of sections) {
-		if (section.length <= maxSize) {
-			chunks.push(section);
-			continue;
-		}
-
-		const headingMatch = section.match(/^#{1,3} .*$/m);
-		const heading = headingMatch ? `${headingMatch[0]}\n\n` : "";
-		const subChunks = await chunkText(section, maxSize, 200);
-		for (const [idx, sub] of subChunks.entries()) {
-			chunks.push(idx === 0 ? sub : `${heading}${sub}`);
-		}
-	}
-
-	return chunks;
-}
-
 async function processFile(
 	filePath: string,
 	type: "manual" | "documentos" | "faq",
 ) {
 	const fileName = path.basename(filePath);
 	const fileUrl = `file://${type}/${fileName}`;
-	const course = COURSE_MAP[fileName] || null;
+	const course = courseForSourceFile(fileName);
 
 	console.log(
 		`\n--- Processando: ${fileUrl}${course ? ` [curso: ${course}]` : ""} ---`,
@@ -111,9 +58,9 @@ async function processFile(
 
 		let chunks: string[] = [];
 		if (type === "faq" || filePath.toLowerCase().endsWith(".md")) {
-			chunks = await chunkMarkdown(normalizedContent);
+			chunks = chunkMarkdown(normalizedContent);
 		} else {
-			chunks = await chunkText(normalizedContent);
+			chunks = chunkText(normalizedContent);
 		}
 
 		console.log(`${chunks.length} blocos detectados.`);
