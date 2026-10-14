@@ -5,7 +5,7 @@ import fastifyJwt from "@fastify/jwt";
 import rateLimit from "@fastify/rate-limit";
 import fastify, { type FastifyInstance } from "fastify";
 import { env } from "./config/env";
-import { AUTH_COOKIE_NAME } from "./lib/auth-cookies";
+import { AUTH_COOKIE_NAME } from "./lib/auth-cookie.constants";
 import { authRoutes } from "./routes/auth.routes";
 import { chatRoutes } from "./routes/chat.routes";
 
@@ -13,16 +13,22 @@ export interface BuildAppOptions {
 	logger?: boolean;
 }
 
+const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 	// trustProxy: em produção rodamos atrás de um proxy/PaaS que termina TLS
 	// (Render/Railway/Fly/Nginx...) — isso faz o Fastify calcular
 	// request.protocol/request.ip a partir de X-Forwarded-Proto/-For em vez
 	// do socket cru, que sempre chega como HTTP vindo do proxy.
-	const app = fastify({ logger: options.logger ?? true, trustProxy: true });
+	// Confia em exatamente 1 salto (o proxy à frente do app): com `true`,
+	// request.ip viraria a entrada mais à esquerda do X-Forwarded-For, que o
+	// próprio cliente escolhe — e o rate limit de /login (chaveado por IP)
+	// seria contornado trocando esse header a cada tentativa.
+	const app = fastify({ logger: options.logger ?? true, trustProxy: 1 });
 
 	const corsOrigin = env.CORS_ORIGIN
 		? env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
-		: true; // dev sem CORS_ORIGIN definido: reflete a origem da requisição
+		: LOCALHOST_ORIGIN; // sem CORS_ORIGIN: só localhost (qualquer porta)
 
 	app.register(cors, {
 		origin: corsOrigin,

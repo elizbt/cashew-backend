@@ -7,44 +7,46 @@ import {
 	CSRF_COOKIE_NAME,
 	SESSION_TTL_JWT,
 	SESSION_TTL_SECONDS,
-} from "../lib/auth-cookies";
+} from "../lib/auth-cookie.constants";
+import { validationErrorResponse } from "../lib/validation-error";
 import {
 	type AuthService,
 	loginSchema,
 	registerSchema,
 } from "../services/auth.service";
 
-function zodErrorResponse(error: ZodError) {
+function csrfCookieOptions() {
+	// Legível por JS de propósito no cenário de mesmo host; quando frontend e
+	// API estão em hosts diferentes o JS do frontend não enxerga este cookie,
+	// por isso o mesmo valor também volta no corpo de /login e de GET /csrf.
+	// Continua sendo proteção CSRF (double-submit) porque um site atacante não
+	// consegue ler nem o cookie nem essas respostas (bloqueadas pelo CORS).
 	return {
-		message: "Dados inválidos",
-		issues: error.issues.map((issue) => ({ message: issue.message })),
+		httpOnly: false,
+		secure: env.NODE_ENV === "production",
+		sameSite: "lax" as const,
+		path: "/",
+		maxAge: SESSION_TTL_SECONDS,
 	};
 }
 
-function setSessionCookies(reply: FastifyReply, token: string) {
-	const isProduction = env.NODE_ENV === "production";
+function issueCsrfToken(reply: FastifyReply) {
+	const csrfToken = randomBytes(32).toString("hex");
+	reply.setCookie(CSRF_COOKIE_NAME, csrfToken, csrfCookieOptions());
+	return csrfToken;
+}
 
+function setSessionCookies(reply: FastifyReply, token: string) {
 	// httpOnly: inacessível a JS (mitiga roubo de token via XSS).
 	reply.setCookie(AUTH_COOKIE_NAME, token, {
 		httpOnly: true,
-		secure: isProduction,
+		secure: env.NODE_ENV === "production",
 		sameSite: "lax",
 		path: "/",
 		maxAge: SESSION_TTL_SECONDS,
 	});
 
-	// Legível por JS de propósito: o frontend lê esse valor e o reenvia no
-	// header X-CSRF-Token em requisições que mutam estado (double-submit
-	// cookie pattern) — só funciona como proteção CSRF porque um site
-	// atacante não consegue LER o cookie da vítima, só fazer o navegador
-	// enviá-lo.
-	reply.setCookie(CSRF_COOKIE_NAME, randomBytes(32).toString("hex"), {
-		httpOnly: false,
-		secure: isProduction,
-		sameSite: "lax",
-		path: "/",
-		maxAge: SESSION_TTL_SECONDS,
-	});
+	return issueCsrfToken(reply);
 }
 
 export class AuthController {
@@ -57,7 +59,7 @@ export class AuthController {
 			return reply.status(201).send(user);
 		} catch (error: any) {
 			if (error instanceof ZodError) {
-				return reply.status(400).send(zodErrorResponse(error));
+				return reply.status(400).send(validationErrorResponse(error));
 			}
 			return reply.status(400).send({ message: error.message });
 		}
@@ -73,7 +75,7 @@ export class AuthController {
 				{ sign: { sub: user.id, expiresIn: SESSION_TTL_JWT } },
 			);
 
-			setSessionCookies(reply, token);
+			const csrfToken = setSessionCookies(reply, token);
 
 			// O token também volta no corpo por compatibilidade com clientes
 			// não-navegador (curl/mobile/scripts) e para não quebrar o
@@ -82,13 +84,20 @@ export class AuthController {
 			return reply.status(200).send({
 				user,
 				token,
+				csrfToken,
 			});
 		} catch (error: any) {
 			if (error instanceof ZodError) {
-				return reply.status(400).send(zodErrorResponse(error));
+				return reply.status(400).send(validationErrorResponse(error));
 			}
 			return reply.status(401).send({ message: error.message });
 		}
+	}
+
+	async csrf(request: FastifyRequest, reply: FastifyReply) {
+		const csrfToken =
+			request.cookies[CSRF_COOKIE_NAME] ?? issueCsrfToken(reply);
+		return reply.status(200).send({ csrfToken });
 	}
 
 	async logout(_request: FastifyRequest, reply: FastifyReply) {

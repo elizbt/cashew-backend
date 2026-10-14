@@ -20,19 +20,28 @@ if (!apiKey) {
 
 const genAI = new GoogleGenerativeAI(apiKey);
 
+// Teto por chamada ao Gemini: sem ele um provedor lento prende o handler de
+// /chat indefinidamente (e o retry com fallback em chat.service multiplica a
+// espera). Fica abaixo dos 60s que o frontend espera por /chat.
+const GEMINI_TIMEOUT_MS = 25_000;
+
 export function getChatModel(systemInstruction?: string, useFallback = false) {
-	return genAI.getGenerativeModel({
-		model: useFallback ? fallbackModelName : chatModelName,
-		systemInstruction,
-		generationConfig: {
-			temperature: 0.2,
+	return genAI.getGenerativeModel(
+		{
+			model: useFallback ? fallbackModelName : chatModelName,
+			systemInstruction,
+			generationConfig: {
+				temperature: 0.2,
+			},
 		},
-	});
+		{ timeout: GEMINI_TIMEOUT_MS },
+	);
 }
 
-export const embeddingModel = genAI.getGenerativeModel({
-	model: embeddingModelName,
-});
+export const embeddingModel = genAI.getGenerativeModel(
+	{ model: embeddingModelName },
+	{ timeout: GEMINI_TIMEOUT_MS },
+);
 
 // A coluna "embedding" no banco é vector(3072) (ver prisma/migrations),
 // a dimensão nativa (sem truncation via Matryoshka) do gemini-embedding-001.

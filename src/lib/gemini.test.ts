@@ -33,7 +33,18 @@ describe("lib/gemini", () => {
 				systemInstruction: "system instruction",
 				generationConfig: expect.objectContaining({ temperature: 0.2 }),
 			}),
+			expect.anything(),
 		);
+	});
+
+	it("sets a request timeout on the chat model so a slow provider can't hang /chat", async () => {
+		const { getChatModel } = await import("./gemini.js");
+
+		getChatModel("system instruction", false);
+
+		expect(getGenerativeModelMock.mock.calls.at(-1)?.[1]).toEqual({
+			timeout: expect.any(Number),
+		});
 	});
 
 	it("switches to the fallback model name when useFallback is true", async () => {

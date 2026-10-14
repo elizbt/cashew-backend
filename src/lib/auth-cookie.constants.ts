@@ -1,7 +1,3 @@
-// Nomes/constantes compartilhados entre app.ts (registro dos plugins),
-// auth.controller.ts (quem seta os cookies no login) e chat.routes.ts
-// (quem valida o CSRF token) — para não duplicar strings mágicas.
-
 export const AUTH_COOKIE_NAME = "token";
 export const CSRF_COOKIE_NAME = "csrfToken";
 export const CSRF_HEADER_NAME = "x-csrf-token";

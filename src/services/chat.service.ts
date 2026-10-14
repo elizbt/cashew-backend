@@ -71,6 +71,15 @@ REGRAS RÍGIDAS DE ATUAÇÃO:
 7. Não repita avisos sobre ser um projeto de TCC ou sua identidade, a menos que seja a primeira mensagem do chat.
 `;
 
+export class ChatNotFoundError extends Error {
+	readonly code = "CHAT_NOT_FOUND";
+
+	constructor() {
+		super("Chat not found or not owned by user");
+		this.name = "ChatNotFoundError";
+	}
+}
+
 export class ChatService {
 	private async getContext(
 		query: string,
@@ -292,7 +301,7 @@ ${content}
 		});
 
 		if (!chat || chat.userId !== userId) {
-			throw new Error("Chat not found or not owned by user");
+			throw new ChatNotFoundError();
 		}
 
 		await prisma.$transaction([

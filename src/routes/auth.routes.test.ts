@@ -172,6 +172,25 @@ describe("routes/auth.routes", () => {
 			expect(cookies.csrfToken.value).not.toBe(cookies.token.value);
 		});
 
+		it("returns the CSRF token in the body too, matching the cookie (frontend on another host can't read the cookie)", async () => {
+			const passwordHash = await bcrypt.hash("Senha123", 8);
+			prismaMock.user.findUnique.mockResolvedValue({
+				id: "user-1",
+				name: "Ana",
+				email: "ana@example.com",
+				password: passwordHash,
+			});
+
+			const response = await app.inject({
+				method: "POST",
+				url: "/login",
+				payload: { email: "ana@example.com", password: "Senha123" },
+			});
+
+			const csrfCookie = response.cookies.find((c) => c.name === "csrfToken");
+			expect(response.json().csrfToken).toBe(csrfCookie?.value);
+		});
+
 		it("marks cookies Secure only outside development (secure requires HTTPS, which local dev usually isn't)", async () => {
 			const passwordHash = await bcrypt.hash("Senha123", 8);
 			prismaMock.user.findUnique.mockResolvedValue({
@@ -236,6 +255,41 @@ describe("routes/auth.routes", () => {
 		});
 	});
 
+	describe("GET /csrf", () => {
+		it("rejects a request without a session with 401", async () => {
+			const response = await app.inject({ method: "GET", url: "/csrf" });
+
+			expect(response.statusCode).toBe(401);
+		});
+
+		it("returns the CSRF token of the current session cookie", async () => {
+			const token = app.jwt.sign({ name: "Ana" }, { sub: "user-1" });
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/csrf",
+				cookies: { token, csrfToken: "existing-csrf-value" },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.json()).toEqual({ csrfToken: "existing-csrf-value" });
+		});
+
+		it("issues a new CSRF cookie when the session has none yet", async () => {
+			const token = app.jwt.sign({ name: "Ana" }, { sub: "user-1" });
+
+			const response = await app.inject({
+				method: "GET",
+				url: "/csrf",
+				cookies: { token },
+			});
+
+			const csrfCookie = response.cookies.find((c) => c.name === "csrfToken");
+			expect(csrfCookie?.value.length).toBeGreaterThan(20);
+			expect(response.json().csrfToken).toBe(csrfCookie?.value);
+		});
+	});
+
 	describe("POST /logout", () => {
 		it("clears both session cookies (only the server can, since token is httpOnly)", async () => {
 			const response = await app.inject({ method: "POST", url: "/logout" });
@@ -287,6 +341,27 @@ describe("routes/auth.routes", () => {
 			const results = [];
 			for (let i = 0; i < 6; i++) {
 				results.push(await attempt(`ana${i}@example.com`));
+			}
+
+			expect(results[5].statusCode).toBe(429);
+		});
+
+		it("still blocks a 6th /login attempt when the client rotates a spoofed X-Forwarded-For", async () => {
+			prismaMock.user.findUnique.mockResolvedValue(null);
+			// O proxy confiável sempre anexa o IP real do cliente no fim da
+			// lista; o que vem antes é escolhido pelo cliente e não pode mudar
+			// a chave do rate limit.
+			const attempt = (i: number) =>
+				app.inject({
+					method: "POST",
+					url: "/login",
+					headers: { "x-forwarded-for": `10.0.0.${i}, 203.0.113.7` },
+					payload: { email: "attacker@example.com", password: "GuessMe1" },
+				});
+
+			const results = [];
+			for (let i = 0; i < 6; i++) {
+				results.push(await attempt(i));
 			}
 
 			expect(results[5].statusCode).toBe(429);

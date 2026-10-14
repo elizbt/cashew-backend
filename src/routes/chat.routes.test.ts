@@ -62,6 +62,30 @@ describe("routes/chat.routes", () => {
 		await app.close();
 	});
 
+	describe("CORS without CORS_ORIGIN", () => {
+		it("allows a localhost origin with credentials", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/health",
+				headers: { origin: "http://localhost:5173" },
+			});
+
+			expect(response.headers["access-control-allow-origin"]).toBe(
+				"http://localhost:5173",
+			);
+		});
+
+		it("does not reflect an arbitrary origin", async () => {
+			const response = await app.inject({
+				method: "GET",
+				url: "/health",
+				headers: { origin: "https://evil.example.com" },
+			});
+
+			expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+		});
+	});
+
 	describe("GET /health", () => {
 		it("is public and reports ok", async () => {
 			const response = await app.inject({ method: "GET", url: "/health" });
@@ -125,6 +149,19 @@ describe("routes/chat.routes", () => {
 			});
 
 			expect(response.statusCode).toBe(200);
+		});
+
+		it("still requires CSRF when the Authorization header is not Bearer (auth falls back to the cookie)", async () => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/chat",
+				cookies: { token: tokenForUser1, csrfToken: "the-real-csrf-value" },
+				headers: { authorization: "Basic Zm9vOmJhcg==" },
+				payload: { message: "Oi" },
+			});
+
+			expect(response.statusCode).toBe(403);
+			expect(response.json().code).toBe("CSRF_INVALID");
 		});
 
 		it("does not require a CSRF header for Bearer-token auth (not vulnerable to CSRF)", async () => {
@@ -207,6 +244,11 @@ describe("routes/chat.routes", () => {
 			});
 
 			expect(response.statusCode).toBe(400);
+			expect(response.json()).toEqual({
+				code: "VALIDATION_ERROR",
+				message: "Dados inválidos",
+				issues: [{ message: expect.any(String) }],
+			});
 		});
 
 		it("rejects a malformed chatId with 400", async () => {
