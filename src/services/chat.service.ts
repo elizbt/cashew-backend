@@ -1,3 +1,4 @@
+import { detectCourse } from "../lib/course-catalog";
 import { geminiEmbedding, getChatModel } from "../lib/gemini";
 import { prisma } from "../lib/prisma";
 
@@ -12,43 +13,13 @@ interface DocumentContext {
 	url: string;
 }
 
-// Sinônimos usados para detectar a qual curso a pergunta se refere, e assim
-// restringir a busca vetorial ao(s) documento(s) daquele curso (evita que a
-// busca traga por engano o chunk de "coordenador"/"contato" de outro curso,
-// já que os documentos de cursos diferentes têm estrutura de texto parecida).
-const COURSE_KEYWORDS: Record<string, string[]> = {
-	tads: [
-		"tads",
-		"analise e desenvolvimento de sistemas",
-		"análise e desenvolvimento de sistemas",
-	],
-	administracao: ["administracao", "administração"],
-	"engenharia-agricola-ambiental": [
-		"engenharia agricola",
-		"engenharia agrícola",
-		"engenharia ambiental",
-		"agricola e ambiental",
-		"agrícola e ambiental",
-	],
-	"gestao-saude": ["gestao em saude", "gestão em saúde", "gestao em saúde"],
-	"gestao-ambiental": ["gestao ambiental", "gestão ambiental"],
-};
+export class ChatNotFoundError extends Error {
+	readonly code = "CHAT_NOT_FOUND";
 
-function normalize(text: string): string {
-	return text
-		.toLowerCase()
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "");
-}
-
-function detectCourse(query: string): string | null {
-	const normalizedQuery = normalize(query);
-	for (const [course, keywords] of Object.entries(COURSE_KEYWORDS)) {
-		if (keywords.some((kw) => normalizedQuery.includes(normalize(kw)))) {
-			return course;
-		}
+	constructor() {
+		super("Chat not found or not owned by user");
+		this.name = "ChatNotFoundError";
 	}
-	return null;
 }
 
 export const FALLBACK_TRIGGER = "não possuo informações precisas";
@@ -292,7 +263,7 @@ ${content}
 		});
 
 		if (!chat || chat.userId !== userId) {
-			throw new Error("Chat not found or not owned by user");
+			throw new ChatNotFoundError();
 		}
 
 		await prisma.$transaction([

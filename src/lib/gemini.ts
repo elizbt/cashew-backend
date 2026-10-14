@@ -36,8 +36,10 @@ export const embeddingModel = genAI.getGenerativeModel({
 
 // A coluna "embedding" no banco é vector(3072) (ver prisma/migrations),
 // a dimensão nativa (sem truncation via Matryoshka) do gemini-embedding-001.
-// Com um corpus pequeno e sem índice ANN, não há custo relevante em manter
-// a dimensão cheia, e a qualidade da busca é melhor do que truncando pra 768.
+// Sem índice ANN, a busca é um scan sequencial — custo linear no número de
+// chunks, ainda não medido. Os índices HNSW/IVFFlat do pgvector aceitam no
+// máximo 2000 dimensões para o tipo vector: se um índice for necessário,
+// migrar a coluna para halfvec(3072) ou truncar a dimensionalidade.
 const EMBEDDING_DIMENSIONS = 3072;
 
 export const geminiEmbedding = {

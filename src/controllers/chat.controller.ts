@@ -1,7 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
 import { chatSchema } from "@/schemas/chat.schema.js";
-import type { ChatService } from "@/services/chat.service.js";
+import {
+	ChatNotFoundError,
+	type ChatService,
+} from "@/services/chat.service.js";
 
 export class ChatController {
 	constructor(private chatService: ChatService) {}
@@ -89,10 +92,7 @@ export class ChatController {
 				return reply.status(400).send({ message: "ID de conversa inválido." });
 			}
 
-			if (
-				error instanceof Error &&
-				error.message === "Chat not found or not owned by user"
-			) {
+			if (error instanceof ChatNotFoundError) {
 				return reply.status(404).send({ message: "Conversa não encontrada." });
 			}
 

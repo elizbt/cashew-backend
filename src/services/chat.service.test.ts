@@ -301,12 +301,14 @@ describe("services/chat.service", () => {
 	describe("authorization", () => {
 		it("deleteChat refuses to delete a chat that does not exist", async () => {
 			prismaMock.chat.findUnique.mockResolvedValue(null);
-			const { ChatService } = await import("./chat.service.js");
+			const { ChatService, ChatNotFoundError } = await import(
+				"./chat.service.js"
+			);
 			const service = new ChatService();
 
 			await expect(
 				service.deleteChat("missing-chat", "user-1"),
-			).rejects.toThrow("Chat not found or not owned by user");
+			).rejects.toBeInstanceOf(ChatNotFoundError);
 			expect(prismaMock.$transaction).not.toHaveBeenCalled();
 		});
 
@@ -315,12 +317,14 @@ describe("services/chat.service", () => {
 				id: "chat-1",
 				userId: "victim-user",
 			});
-			const { ChatService } = await import("./chat.service.js");
+			const { ChatService, ChatNotFoundError } = await import(
+				"./chat.service.js"
+			);
 			const service = new ChatService();
 
 			await expect(
 				service.deleteChat("chat-1", "attacker-user"),
-			).rejects.toThrow("Chat not found or not owned by user");
+			).rejects.toBeInstanceOf(ChatNotFoundError);
 			expect(prismaMock.$transaction).not.toHaveBeenCalled();
 		});
 
